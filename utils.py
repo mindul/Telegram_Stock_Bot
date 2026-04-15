@@ -48,3 +48,42 @@ def parse_investing_search(query: str) -> list:
 def split_message(message: str, max_length: int = 4000) -> list:
     """메시지가 너무 길 경우 분할"""
     return [message[i:i + max_length] for i in range(0, len(message), max_length)]
+
+def get_exchange_rates() -> dict:
+    """네이버를 스크래핑하여 미국달러, 호주달러, 일본엔화 환율을 가져옵니다."""
+    import requests
+    from bs4 import BeautifulSoup
+    
+    rates = {}
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    
+    try:
+        # (1) 호주달러 환율
+        aus_url = 'https://search.naver.com/search.naver?query=%ED%98%B8%EC%A3%BC%EB%8B%AC%EB%9F%AC+%ED%99%98%EC%9C%A8'
+        response = requests.get(aus_url, headers=headers)
+        dom = BeautifulSoup(response.content, "html.parser")
+        aus_price = dom.select_one(".price")
+        aus_gap = dom.select_one(".price_gap")
+        rates['AUD'] = f"> 🇦🇺 AUD $ {aus_price.text}원, {aus_gap.text}" if aus_price and aus_gap else "> 🇦🇺 AUD 환율 정보 없음"
+        
+        # (2) 달러 환율
+        usd_url = 'https://search.naver.com/search.naver?query=%EB%8B%AC%EB%9F%AC+%ED%99%98%EC%9C%A8'
+        response = requests.get(usd_url, headers=headers)
+        dom = BeautifulSoup(response.content, "html.parser")
+        usd_price = dom.select_one(".price")
+        usd_gap = dom.select_one(".price_gap")
+        rates['USD'] = f"> 🇺🇸 USD $ {usd_price.text}원, {usd_gap.text}" if usd_price and usd_gap else "> 🇺🇸 USD 환율 정보 없음"
+
+        # (3) 엔 환율
+        jpn_url = 'https://search.naver.com/search.naver?query=%EC%97%94+%ED%99%98%EC%9C%A8'
+        response = requests.get(jpn_url, headers=headers)
+        dom = BeautifulSoup(response.content, "html.parser")
+        jpn_price = dom.select_one(".price")
+        jpn_gap = dom.select_one(".price_gap")
+        rates['JPY'] = f"> 🇯🇵 JPY ¥ {jpn_price.text}원, {jpn_gap.text}" if jpn_price and jpn_gap else "> 🇯🇵 JPY 환율 정보 없음"
+        
+        return rates
+
+    except Exception as e:
+        logger.error(f"환율 정보 스크래핑 중 오류: {e}")
+        return None

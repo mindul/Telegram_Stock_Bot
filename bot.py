@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 from config import TELEGRAM_BOT_TOKEN, ADMIN_USER_ID
-from utils import parse_investing_search
+from utils import parse_investing_search, get_exchange_rates
 
 # 로깅 설정
 logging.basicConfig(
@@ -79,6 +79,41 @@ async def get_stock_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await update.message.reply_text("⚠️ 봇 처리 중 예상치 못한 오류가 발생했습니다.")
 
+async def get_rate_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/rate 명령어 핸들러: 네이버에서 주요 환율 정보를 가져옵니다."""
+    user_id = update.effective_user.id
+    
+    # 1. 권한 검사
+    if user_id != ADMIN_USER_ID:
+        logger.warning(f"권한 없는 사용자({user_id}) (환율검색) 접근 시도 차단.")
+        await update.message.reply_text(f"⛔️ 접근 권한이 없습니다. (ID: {user_id})")
+        return
+
+    status_msg = await update.message.reply_text("⏳ 실시간 환율 정보를 가져오는 중입니다...")
+
+    try:
+        rates = get_exchange_rates()
+        await status_msg.delete()
+        
+        if not rates:
+            await update.message.reply_text("❌ 환율 정보를 가져오는 데 실패했습니다.")
+            return
+            
+        reply_text = f"💱 **오늘의 주요 환율 정보**\n\n"
+        reply_text += rates.get('USD', '') + "\n"
+        reply_text += rates.get('AUD', '') + "\n"
+        reply_text += rates.get('JPY', '') + "\n"
+        
+        await update.message.reply_text(reply_text)
+        
+    except Exception as e:
+        logger.error(f"환율 오류 발생: {e}")
+        try:
+            await status_msg.delete()
+        except:
+            pass
+        await update.message.reply_text("⚠️ 환율 정보를 가져오는 중 오류가 발생했습니다.")
+
 if __name__ == '__main__':
     logger.info("텔레그램 주식 검색 봇 시작 준비 중...")
 
@@ -88,6 +123,8 @@ if __name__ == '__main__':
 
         # /get 명령어 핸들러 등록
         app.add_handler(CommandHandler("get", get_stock_info))
+        # /rate 명령어 핸들러 등록
+        app.add_handler(CommandHandler("rate", get_rate_info))
 
         logger.info("봇 폴링(Polling)을 시작합니다. 텔레그램에서 '/get <종목명>'을 전송해보세요.")
         app.run_polling()
