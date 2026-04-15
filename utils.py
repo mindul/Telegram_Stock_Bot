@@ -1,57 +1,50 @@
-import httpx
-from bs4 import BeautifulSoup
-import re
+import FinanceDataReader as fdr
+import logging
+
+logger = logging.getLogger(__name__)
 
 def parse_investing_search(query: str) -> list:
-    """Investing.com에서 종목 코드를 검색하여 결과(종목명, 심볼, URL) 리스트를 반환합니다."""
-    url = f"https://kr.investing.com/search?q={query}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0"
-    }
-    
+    """
+    FinanceDataReader를 사용하여 종목 정보를 검색합니다.
+    차단 위험이 있는 Investing.com 스크래핑의 완벽한 대안입니다.
+    """
     try:
-        response = httpx.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, "html.parser")
+        # 한국 거래소(KRX) 전체 종목 리스트를 가져옵니다 (상장사 전체)
+        # 이 데이터는 메모리에 캐싱하거나 전역 변수로 관리하면 더 빠릅니다.
+        df_krx = fdr.StockListing('KRX')
+
+        # 입력한 쿼리가 종목명 또는 종목코드에 포함된 데이터 필터링
+        # 이름(Name) 또는 코드(Code)에서 검색어 포함 여부 확인
+        matched = df_krx[df_krx['Name'].str.contains(query, case=False) | 
+                         df_krx['Code'].str.contains(query, case=False)]
+
+        if matched.empty:
+            return []
+
         results = []
-        
-        # <a> 태그를 순회하며 주식(equities) 링크 파싱
-        for a in soup.find_all("a"):
-            href = a.get("href", "")
+        # 검색 결과 중 상위 3개만 추출
+        for _, row in matched.head(3).iterrows():
+            symbol = row['Code']
+            name = row['Name']
+            market = row['Market']  # KOSPI, KOSDAQ 등
             
-            # 주식 관련 종목이고, 보통 뉴스 기사가 아닌 경우 추출 (/equities/...)
-            if href.startswith("/equities/"):
-                text_lines = [line.strip() for line in a.text.split("\n") if line.strip()]
-                
-                # ['AAPL', '애플', '주식 - 나스닥', 'equities'] 형태를 파싱
-                if len(text_lines) >= 3:
-                    symbol = text_lines[0]
-                    name = text_lines[1]
-                    exchange = text_lines[2]
-                    
-                    full_link = "https://kr.investing.com" + href
-                    
-                    # 이미 추가한 링크는 중복 방지
-                    if any(r['link'] == full_link for r in results):
-                        continue
-                        
-                    results.append({
-                        "name": name,
-                        "symbol": symbol,
-                        "exchange": exchange,
-                        "link": full_link
-                    })
-                    
-            if len(results) >= 3: # 상위 3개까지만
-                break
-                
+            # 네이버 금융 등 표준 상세 페이지 링크로 대체 (Investing.com 대체)
+            link = f"https://finance.naver.com/item/main.naver?code={symbol}"
+
+            results.append({
+                "name": name,
+                "symbol": symbol,
+                "exchange": market,
+                "link": link
+            })
+
         return results
-        
+
     except Exception as e:
-        print(f"Error fetching investing.com: {e}")
-        return []
+        logger.error(f"FinanceDataReader 검색 중 오류 발생: {e}")
+        # None을 반환하여 bot.py에서 서버 오류 메시지를 띄우게 함
+        return None
 
 def split_message(message: str, max_length: int = 4000) -> list:
-    """메시지가 너무 길 경우 분할 (이전 하위 호환을 위해 남겨둠)"""
+    """메시지가 너무 길 경우 분할"""
     return [message[i:i + max_length] for i in range(0, len(message), max_length)]
