@@ -19,7 +19,7 @@ async def get_stock_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. 명령어 파라미터 체크
     if not context.args:
         await update.message.reply_text(
-            "검색할 종목명이나 코드를 입력해주세요. \n예시: `/get AAPL` 또는 `/get 삼성전기`", 
+            "검색할 종목명이나 코드를 입력해주세요. \n예시: `/get 삼성전자` 또는 `/get 005930`", 
             parse_mode='Markdown'
         )
         return
