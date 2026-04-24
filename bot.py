@@ -89,6 +89,19 @@ async def get_rate_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #     await update.message.reply_text(f"⛔️ 접근 권한이 없습니다. (ID: {user_id})")
     #     return
 
+    # 2. 특정 환율 링크 제공 기능 추가
+    if context.args:
+        currency = context.args[0].lower()
+        if currency == 'aud':
+            await update.message.reply_text("https://kr.investing.com/currencies/aud-krw")
+            return
+        elif currency == 'usd':
+            await update.message.reply_text("https://kr.investing.com/currencies/usd-krw")
+            return
+        elif currency == 'jpy':
+            await update.message.reply_text("https://kr.investing.com/currencies/jpy-krw")
+            return
+
     status_msg = await update.message.reply_text("⏳ 실시간 환율 정보를 가져오는 중입니다...")
 
     try:
@@ -100,8 +113,8 @@ async def get_rate_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         reply_text = f"💱 **오늘의 주요 환율 정보**\n\n"
-        reply_text += rates.get('USD', '') + "\n"
         reply_text += rates.get('AUD', '') + "\n"
+        reply_text += rates.get('USD', '') + "\n"
         reply_text += rates.get('JPY', '') + "\n"
 
         await update.message.reply_text(reply_text)
