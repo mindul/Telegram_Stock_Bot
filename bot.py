@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 from config import TELEGRAM_BOT_TOKEN, ADMIN_USER_ID
 from utils import parse_investing_search, get_exchange_rates
@@ -135,8 +135,10 @@ if __name__ == '__main__':
         app.add_handler(CommandHandler("get", get_stock_info))
         # /rate 명령어 핸들러 등록
         app.add_handler(CommandHandler("rate", get_rate_info))
-        # /? 및 /h 명령어 핸들러 등록
-        app.add_handler(CommandHandler(["h", "?"], get_help_info))
+        # /h 명령어 핸들러 등록
+        app.add_handler(CommandHandler("h", get_help_info))
+        # /? 명령어 핸들러 등록 (텔레그램 명령어 규칙 우회)
+        app.add_handler(MessageHandler(filters.Regex(r'^/\?$'), get_help_info))
 
         logger.info("봇 폴링(Polling)을 시작합니다. 텔레그램에서 '/get <종목명>'을 전송해보세요.")
         app.run_polling()
