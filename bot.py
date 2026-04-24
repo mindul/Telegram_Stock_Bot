@@ -114,6 +114,16 @@ async def get_rate_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await update.message.reply_text("⚠️ 환율 정보를 가져오는 중 오류가 발생했습니다.")
 
+async def get_help_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/? 또는 /h 명령어 핸들러: help.md 파일의 내용을 읽어 보여줍니다."""
+    try:
+        with open('help.md', 'r', encoding='utf-8') as f:
+            help_text = f.read()
+        await update.message.reply_text(help_text, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"도움말 읽기 오류 발생: {e}")
+        await update.message.reply_text("⚠️ 도움말 정보를 가져오는 중 오류가 발생했습니다.")
+
 if __name__ == '__main__':
     logger.info("텔레그램 주식 검색 봇 시작 준비 중...")
 
@@ -125,6 +135,8 @@ if __name__ == '__main__':
         app.add_handler(CommandHandler("get", get_stock_info))
         # /rate 명령어 핸들러 등록
         app.add_handler(CommandHandler("rate", get_rate_info))
+        # /? 및 /h 명령어 핸들러 등록
+        app.add_handler(CommandHandler(["h", "?"], get_help_info))
 
         logger.info("봇 폴링(Polling)을 시작합니다. 텔레그램에서 '/get <종목명>'을 전송해보세요.")
         app.run_polling()
