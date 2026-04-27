@@ -2,6 +2,8 @@ import FinanceDataReader as fdr
 import pandas as pd
 import requests
 import logging
+from bs4 import BeautifulSoup
+
 
 logger = logging.getLogger(__name__)
 
@@ -126,20 +128,87 @@ def get_exchange_rates() -> dict:
     try:
         rates = {}
         
-        # USD/KRW
-        df_usd = fdr.DataReader('USDKRW=X')
-        if not df_usd.empty:
-            rates['USD'] = f"🇺🇸 USD: {df_usd.iloc[-1]['Close']:,.2f} 원"
+        def format_rate(flag, name, df, is_jpy=False):
+            if df.empty:
+                return None
+            if len(df) >= 2:
+                current = float(df.iloc[-1]['Close'])
+                prev = float(df.iloc[-2]['Close'])
+                diff = current - prev
+                rate = (diff / prev) * 100 if prev != 0 else 0.0
+                
+                sign = "+" if diff > 0 else ""
+                
+                if is_jpy:
+                    display_current = current * 100
+                    display_diff = diff * 100
+                    return f"{flag} {name}: {display_current:,.2f} 원({sign}{display_diff:,.2f}원, {sign}{rate:,.2f}%)"
+                else:
+                    return f"{flag} {name}: {current:,.2f} 원({sign}{diff:,.2f}원, {sign}{rate:,.2f}%)"
+            else:
+                current = float(df.iloc[-1]['Close'])
+                if is_jpy:
+                    current *= 100
+                return f"{flag} {name}: {current:,.2f} 원"
+
+        def scrape_naver_rate(url, flag, name):
+            try:
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+                if res.status_code == 200:
+                    soup = BeautifulSoup(res.text, 'html.parser')
+                    info = soup.select_one(".price_info")
+                    if info:
+                        price = info.select_one(".price").text.strip().replace(',', '')
+                        gap_elem = info.select_one(".price_gap")
+                        pct_elem = gap_elem.select_one("span")
+                        
+                        gap_val = gap_elem.contents[0].strip().replace(',', '')
+                        gap_val = float(gap_val) if gap_val else 0.0
+                        
+                        pct_str = pct_elem.text.strip().replace('(', '').replace(')', '').replace('%', '')
+                        pct_val = float(pct_str)
+                        
+                        sign = "+" if pct_val > 0 else ""
+                        if pct_val < 0:
+                            gap_val = -gap_val
+                            
+                        return f"{flag} {name}: {float(price):,.2f} 원({sign}{gap_val:,.2f}원, {sign}{pct_val:,.2f}%)"
+            except Exception as e:
+                logger.error(f"네이버 {name} 환율 크롤링 오류: {e}")
+            return None
+
+        # USD/KRW (네이버 크롤링 우선 시도, 실패 시 FDR 대체)
+        url_usd = "https://search.naver.com/search.naver?sm=mtb_drt&where=m&query=%EB%AF%B8%EA%B5%AD%ED%99%98%EC%9C%A8"
+        usd_val = scrape_naver_rate(url_usd, "🇺🇸", "USD")
+        if usd_val:
+            rates['USD'] = usd_val
+        else:
+            df_usd = fdr.DataReader('USDKRW=X')
+            if not df_usd.empty:
+                val = format_rate("🇺🇸", "USD", df_usd)
+                if val: rates['USD'] = val
+
+        # AUD/KRW (네이버 크롤링 우선 시도, 실패 시 FDR 대체)
+        url_aud = "https://search.naver.com/search.naver?sm=mtb_drt&where=m&query=%ED%98%B8%EC%A3%BC%ED%99%98%EC%9C%A8"
+        aud_val = scrape_naver_rate(url_aud, "🇦🇺", "AUD")
+        if aud_val:
+            rates['AUD'] = aud_val
+        else:
+            df_aud = fdr.DataReader('AUDKRW=X')
+            if not df_aud.empty:
+                val = format_rate("🇦🇺", "AUD", df_aud)
+                if val: rates['AUD'] = val
             
-        # AUD/KRW
-        df_aud = fdr.DataReader('AUDKRW=X')
-        if not df_aud.empty:
-            rates['AUD'] = f"🇦🇺 AUD: {df_aud.iloc[-1]['Close']:,.2f} 원"
-            
-        # JPY/KRW (FDR에서는 1엔 기준으로 나옴. 대중적인 100엔 기준으로 변환 표기)
-        df_jpy = fdr.DataReader('JPYKRW=X')
-        if not df_jpy.empty:
-            rates['JPY'] = f"🇯🇵 JPY: {df_jpy.iloc[-1]['Close']*100:,.2f} 원 (100엔 기준)"
+        # JPY/KRW (네이버 크롤링 우선 시도, 실패 시 FDR 대체)
+        url_jpy = "https://search.naver.com/search.naver?sm=mtb_drt&where=m&query=%EC%9D%BC%EB%B3%B8%ED%99%98%EC%9C%A8"
+        jpy_val = scrape_naver_rate(url_jpy, "🇯🇵", "JPY")
+        if jpy_val:
+            rates['JPY'] = jpy_val
+        else:
+            df_jpy = fdr.DataReader('JPYKRW=X')
+            if not df_jpy.empty:
+                val = format_rate("🇯🇵", "JPY", df_jpy, is_jpy=True)
+                if val: rates['JPY'] = val
             
         return rates
     except Exception as e:
